@@ -5,6 +5,11 @@ Ready-to-install Windows executable can be downloaded from Lazy Selector channel
 
   https://t.me/Lazy_Selector
   
+<h3>Note:</h3>
+Copy plugins folder found in the path where VLC media player is installed in your computer (C:\Program Files (x86)\VLC), and paste it in this project's mixer directory.
+
+Then play your audios and videos all the way.
+  
 <h3>Screenshots:</h3>
 
   <h4>Light mode</h4>
