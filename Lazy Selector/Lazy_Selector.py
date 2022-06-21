@@ -1,5 +1,5 @@
-__author__ = "Ernesto"
-__email__ = "ernestondieki12@gmail.com"
+__author__ = "Ondieki"
+__email__ = "ondieki.codes@gmail.com"
 __version__ = "4.2.2"
 __updated__ = "19-06-2022"
 
