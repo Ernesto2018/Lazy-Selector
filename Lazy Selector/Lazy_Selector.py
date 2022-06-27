@@ -1,7 +1,7 @@
-__author__ = "Ondieki"
-__email__ = "ondieki.codes@gmail.com"
+__author__ = "Ernesto"
+__email__ = "ernestondieki12@gmail.com"
 __version__ = "4.2.2"
-__updated__ = "19-06-2022"
+__dated__ = "16-06-2022"
 
 
 # from profiler import profile
@@ -12,13 +12,14 @@ import pafy
 from socket import gethostname, gethostbyname
 from threading import Thread
 from os import chmod, getpid, listdir, popen, remove
-from os.path import expanduser, join, dirname, basename, abspath, splitext, exists
+from os.path import expanduser, join, dirname, basename, abspath, splitext, exists, normpath
 from shutil import rmtree
-from re import split as SPLIT
+from re import split as SPLIT, sub
 from subprocess import call, STARTUPINFO, STARTF_USESHOWWINDOW
 from stat import S_IREAD, S_IWUSR
 from plyer import battery, notification
 import sys
+from send2trash import send2trash
 from random import shuffle
 from images import *
 from time import sleep, time
@@ -139,7 +140,7 @@ class Player(Settings):
             position = Player._CONFIG["window"]["position"]
             self.search_str = Player._CONFIG["files"]["search"]
         except KeyError:
-            self.search_str = "official video"
+            self.search_str = "official music video"
             position = f"{self._root.winfo_x()}+{self._root.winfo_y()}"
         # initial path to Add to Queue
         self._root.geometry("318x118+" + position)
@@ -158,7 +159,6 @@ class Player(Settings):
             self._title_link = self.streamer.search(self.search_str)
         # let duration be greater than 0; prevent slider being at the end on startup
         self.duration = 60
-        self.play_oc_done = False
         self._song = ""
         self._title_txt = ""
         self.audio_download_thread = None
@@ -267,7 +267,7 @@ class Player(Settings):
         if self.controls_frame is not None:
             event.widget["bg"] = "gray28"
         else:
-            # use the current them on leave; that includes light
+            # use the current theme on leave; that includes light
             event.widget["bg"] = Player.BG
 
     def _convert(self, text):
@@ -278,7 +278,7 @@ class Player(Settings):
         if len(text) > 47:  # not so perfect
             text = text[:44] + "..."
 
-        return "".join(text)
+        return text
 
     @property
     def isOffline(self) -> bool:
@@ -475,6 +475,50 @@ class Player(Settings):
 
 # ------------------------------------------------------------------------------------------------------------------------------
 
+    def _remove_streams(self):
+        """ remove selected streams from view """
+        for i in self.listview.curselection()[::-1]:
+            title = self.listview.get(i)
+            self._title_link.pop(title)
+            self.listview.delete(i)
+
+# ------------------------------------------------------------------------------------------------------------------------------
+
+    def _send2trash(self):
+        """
+            Try sending to trash if not removable disk, else delete permanently
+        """
+
+        # if debug: print(len(self._all_files))
+        if askokcancel("Lazy Selector", "Selected files will be deleted from storage\nContinue to delete?"):
+            for i in self.listbox.curselection()[::-1]:
+                if len(self.collected) == 0:
+                    item = self._all_files[i]
+                else:
+                    item = self.collected[i]
+                try:
+                    self._all_files.remove(item)
+                except ValueError:
+                    pass
+                if item in self.collected:
+                    self.collected.remove(item)
+                    self.delete_safe(join(self._songspath, item))
+                self.listbox.delete(i)
+                # delete file
+                filename = join(normpath(self._songspath), item)
+                try:
+                    send2trash(filename)
+                except Exception:
+                    self.delete_safe(filename)
+                # if debug: print(i, item)
+                if i < self.index:
+                    # adjust to playlist shifting
+                    self.index -= 1
+            self._resize_listbox()
+            # if debug: print(len(self._all_files))
+
+# ------------------------------------------------------------------------------------------------------------------------------
+
     def _addto_queue(self):
         """
             Listbox's Play Next
@@ -574,6 +618,8 @@ class Player(Settings):
             popup.add_command(label="Play Next", command=self._addto_queue)
             popup.add_separator()
         popup.add_command(label="Remove from Playlist", command=self._delete_listitem)
+        popup.add_separator()
+        popup.add_command(label="Delete from Storage", command=self._send2trash)
         try:
             popup.tk_popup(event.x_root, event.y_root, 0)
         finally:
@@ -607,6 +653,8 @@ class Player(Settings):
         popup.add_separator()
         popup.add_command(label="Download Audio", command=self.download_audio)
         popup.add_command(label="Download Video", command=self.download_video)
+        popup.add_separator()
+        popup.add_command(label="Remove from Playlist", command=self._remove_streams)
         try:
             popup.tk_popup(event.x_root, event.y_root, 0)
         finally:
@@ -630,10 +678,12 @@ class Player(Settings):
         try:
             if not self._playing:
                 self.shuffle_mixer.prevent_sleep()
-            video = pafy.new(link, basic=False)
+            video = pafy.new(link)  # ydl_opts={"writethumbnail": True}
+            # replace the characters in [] in title, because filenames can't contain them
+            save_title = sub(r'[:\\/"*?|<>]', "-", video.title)
             best_audio = video.getbestaudio(preftype="mp3", ftypestrict=False)
 
-            filename = join(self._songspath, f"{title}.{best_audio.extension}")
+            filename = join(self._songspath, f"{save_title}.{best_audio.extension}")
             best_audio.download(filepath=filename, quiet=True, callback=self.download_callback)
             # convert to mp3
             self.status_bar.configure(text="Converting to MP3 audio...")
@@ -670,10 +720,12 @@ class Player(Settings):
         try:
             if not self._playing:
                 self.shuffle_mixer.prevent_sleep()
-            video = pafy.new(link, basic=False)
+            video = pafy.new(link)
+            # replace the characters in [] with -, because filenames can't contain them
+            save_title = sub(r'[:\\/"*?|<>]', "-", video.title)
             best = video.getbest(preftype="mp4", ftypestrict=False)
 
-            filename = join(self._songspath, f"{title}.{best.extension}")
+            filename = join(self._songspath, f"{save_title}.{best.extension}")
             best.download(filepath=filename, quiet=True, callback=self.download_callback)
             # convert to mp4
             self.status_bar.configure(text="Converting to MP4 video...")
@@ -1103,7 +1155,6 @@ class Player(Settings):
             Tries to mimic on_eos functionalities
         """
         change = 0
-        self.play_oc_done = False
         try:
             if self.tab_num:
                 if not self.isOffline:
@@ -1142,7 +1193,8 @@ class Player(Settings):
                 self._set_thread(self._updating, "Helper").start()
                 self.play_btn_img = self.pause_img
                 self._play_btn.configure(image=self.play_btn_img)
-        except Exception:
+        except Exception as e:
+            print(">>> Exception in _on_click():", e)
             # Slow internet may cause problems, going offline after connection
             if self.tab_num:
                 self.searchlabel.configure(text="Search online:")
@@ -1150,7 +1202,6 @@ class Player(Settings):
                 self.searchlabel.configure(text="Search:")
             self._title_link = None
             self.thread_updating_streams()
-        self.play_oc_done = True
 
 # ------------------------------------------------------------------------------------------------------------------------------
 
@@ -1284,11 +1335,13 @@ class Player(Settings):
                 file = Player._CONFIG["files"]["folder"]
                 self._songspath = file
             except KeyError:
-                # avoid 'name file is not defined' error
+                # avoid 'name `file` is not defined' error
                 file = ""
             if (self._open_folder) or (not exists(file)):
-                self._songspath = askdirectory(title="Choose a folder with audio/video files",
-                                               initialdir=expanduser("~\\"))
+                # normalize path
+                self._songspath = normpath(askdirectory(title="Choose a folder with audio/video files",
+                                                        initialdir=expanduser("~\\"))
+                                           )
             # when a user selects the same folder playing again
             if (file == self._songspath) and (self.index < len(self._all_files) - 1):
                 # don't update the songs list
@@ -1447,7 +1500,7 @@ class Player(Settings):
             # this happens on loading timeout and the play button is clicked for the first time
             if "googlevideo.com/videoplayback?" not in load:
                 # assume it's a file
-                self._title_txt = self._convert(splitext(basename(self._song))[0])
+                self._title_txt = self._convert(splitext(basename(load))[0])
             self.shuffle_mixer.load(load)
             return self.shuffle_mixer
         except Exception:
@@ -1947,10 +2000,11 @@ class Player(Settings):
                     # player ended status
                     if (self.shuffle_mixer.state.value == 6 and not self._active_repeat):
 
-                        if len(self.collected) > 0 and self.controls_frame is not None and self.collection_index > -1 and self.play_oc_done:
+                        if len(self.collected) > 0 and self.controls_frame is not None and self.collection_index > -1:
                             self.collection_index += 1
                             self.listbox.selection_clear(0, "end")
                             self._collection_manager()
+
                         elif self.isStreaming and self._title_link is not None and self.tab_num:
                             if self.change_stream:
                                 self.stream_index += 1
@@ -1988,7 +2042,7 @@ class Player(Settings):
                             said = 1
                     # player ended
                     elif self.shuffle_mixer.state.value == 6:
-                        sleep(0.4)  # possible slight unnoticeable delay from unpausing
+                        sleep(1)
 
                 else:
                     if battery.get_state()["percentage"] < 41 and not said:
@@ -1999,7 +2053,7 @@ class Player(Settings):
                                             timeout=180,
                                             app_icon=DATA_DIR + "\\app.ico" if exists(DATA_DIR + "\\app.ico") else None)
                         said = 1
-                    sleep(0.4)  # possible slight unnoticeable delay from unpausing
+                    sleep(1)
             except AttributeError:
                 self._set_thread(self._set_uptime, "Timer").start()
 
@@ -2010,8 +2064,8 @@ class Player(Settings):
             Plays, checks index and loops in searched songs
         """
 
+        self._playing = 0
         if self.collection_index > len(self.collected) - 1:
-            self._playing = 0
             self.collection_index = 0
         # if debug: print("Collection Manager Index after:", self.collection_index)
         self.listbox.selection_set(self.collection_index)
@@ -2024,9 +2078,9 @@ class Player(Settings):
             Plays, checks index and loops in online streams
         """
 
+        self._playing = 0
         self.listview.selection_clear(0, "end")
         if (self.stream_index > len(self._title_link) - 1) or (self.stream_index < 0):
-            self._playing = 0
             self.stream_index = 0
         self.listview.selection_set(self.stream_index)
         self.listview.see(self.stream_index)
@@ -2079,15 +2133,17 @@ def close_prev():
 
 Thread(target=close_prev, daemon=1).start()
 
-tk = Tk()
-p = Player(tk)
-tk.mainloop()
-# try:
-#     tk = Tk()
-#     p = Player(tk)
-#     tk.mainloop()
-# except Exception:
-#     tk.destroy()
-#     sys.exit(1)
+# tk = Tk()
+# p = Player(tk)
+# tk.mainloop()
+try:
+    tk = Tk()
+    p = Player(tk)
+    tk.mainloop()
+except Exception:
+    tk.destroy()
+
+p.shuffle_mixer.release_sleep()
+sys.exit(1)
 # TODO
 # pass song to queue of already playing player

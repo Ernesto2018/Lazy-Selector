@@ -1,5 +1,5 @@
-__author__ = "Ondieki"
-__email__ = "ondieki.codes@gmail.com"
+__author__ = "Ernesto"
+__email__ = "ernestondieki12@gmail.com"
 __version__ = "4.2"
 
 from os.path import dirname, abspath, join
@@ -50,9 +50,18 @@ class VLC():
 
     def _release(self):
         # release previous; start a fresh
-        self.playlist.stop()
-        self.playlist.release()
-        self.media_list.release()
+        try:
+            self.playlist.stop()
+        except AttributeError:
+            pass
+        try:
+            self.playlist.release()
+        except AttributeError:
+            pass
+        try:
+            self.media_list.release()
+        except AttributeError:
+            pass
         if self.media is not None:
             self.media.release()
         self.media, self.playlist, self.media_list = None, None, None
@@ -171,9 +180,16 @@ class VLC():
         # Windows
         ctypes.windll.kernel32.SetThreadExecutionState(INHIBIT)
         self.will_sleep = False
+        print("SLEEP LOCK SET")
 
     def release_sleep(self):
         """ release the sleep lock """
         # Windows
         ctypes.windll.kernel32.SetThreadExecutionState(RELEASE)
         self.will_sleep = True
+        print("SLEEP LOCK RELEASED")
+
+    def __del__(self):
+        if not self.will_sleep:
+            self.release_sleep()
+        del self
