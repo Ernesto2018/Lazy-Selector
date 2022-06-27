@@ -6,7 +6,8 @@ __dated__ = "16-06-2022"
 
 # from profiler import profile
 import mixer
-from moviepy.editor import AudioFileClip, VideoFileClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 from stream import Stream
 import pafy
 from socket import gethostname, gethostbyname
@@ -60,15 +61,6 @@ def r_path(relpath):
 
 DATA_DIR = r_path("data")
 debug = 0
-# remove previous dlls that are not supported anymore
-for file in ("avbin.dll", "python37.dll", "PIL", "ttkthemes"):
-    if exists(file):
-        try:
-            remove(file)
-        except PermissionError:
-            rmtree(file)
-        except Exception:
-            pass
 
 
 class Settings():
@@ -679,24 +671,25 @@ class Player(Settings):
             if not self._playing:
                 self.shuffle_mixer.prevent_sleep()
             video = pafy.new(link)  # ydl_opts={"writethumbnail": True}
+            best_audio = video.getbestaudio(preftype="mp3", ftypestrict=False)
             # replace the characters in [] in title, because filenames can't contain them
             save_title = sub(r'[:\\/"*?|<>]', "-", video.title)
-            best_audio = video.getbestaudio(preftype="mp3", ftypestrict=False)
+            temp_filename = join(self._songspath, f"{save_title}.{best_audio.extension}")
+            path, ext = splitext(temp_filename)
+            output_filename = f"{path}.mp3"
+            if not exists(output_filename):
 
-            filename = join(self._songspath, f"{save_title}.{best_audio.extension}")
-            best_audio.download(filepath=filename, quiet=True, callback=self.download_callback)
-            # convert to mp3
-            self.status_bar.configure(text="Converting to MP3 audio...")
-            path, ext = splitext(filename)
-            output = f"{path}.mp3"
+                best_audio.download(filepath=temp_filename, quiet=True, callback=self.download_callback)
+                # convert to mp3
+                self.status_bar.configure(text="Converting to MP3 audio...")
 
-            if ext.lower() != ".mp3":
-                audio = AudioFileClip(filename)
-                audio.write_audiofile(output, logger=None)
-                # delete filename when done if ext != mp3
-                self.delete_safe(filename)
-            # done converting
-            self._all_files.append(basename(output))
+                if ext.lower() != ".mp3":
+                    audio = AudioFileClip(temp_filename)
+                    audio.write_audiofile(output_filename, logger=None)
+                    # delete temp_filename when done if initial ext != mp3
+                    self.delete_safe(temp_filename)
+                # done converting
+                self._all_files.append(basename(output_filename))
             self.status_bar.configure(text=f"Downloaded to '{basename(self._songspath)}' folder")
         except Exception:
             self.status_bar.configure(text="An error occured...")
@@ -721,24 +714,25 @@ class Player(Settings):
             if not self._playing:
                 self.shuffle_mixer.prevent_sleep()
             video = pafy.new(link)
+            best_video = video.getbest(preftype="mp4", ftypestrict=False)
             # replace the characters in [] with -, because filenames can't contain them
             save_title = sub(r'[:\\/"*?|<>]', "-", video.title)
-            best = video.getbest(preftype="mp4", ftypestrict=False)
+            temp_filename = join(self._songspath, f"{save_title}.{best_video.extension}")
+            path, ext = splitext(temp_filename)
+            output_filename = f"{path}.mp4"
+            if not exists(output_filename):
 
-            filename = join(self._songspath, f"{save_title}.{best.extension}")
-            best.download(filepath=filename, quiet=True, callback=self.download_callback)
-            # convert to mp4
-            self.status_bar.configure(text="Converting to MP4 video...")
-            path, ext = splitext(filename)
-            output = f"{path}.mp4"
+                best_video.download(filepath=temp_filename, quiet=True, callback=self.download_callback)
+                # convert to mp4
+                self.status_bar.configure(text="Converting to MP4 video...")
 
-            if ext.lower() != ".mp4":
-                video = VideoFileClip(filename)
-                video.write_videofile(output, threads=2, logger=None)
-                # delete filename when done if ext != mp4
-                self.delete_safe(filename)
-            # done converting
-            self._all_files.append(basename(output))
+                if ext.lower() != ".mp4":
+                    video = VideoFileClip(temp_filename)
+                    video.write_videofile(output_filename, threads=2, logger=None)
+                    # delete temp_filename when done if ext != mp4
+                    self.delete_safe(temp_filename)
+                # done converting
+                self._all_files.append(basename(output_filename))
             self.status_bar.configure(text=f"Downloaded to '{basename(self._songspath)}' folder")
         except Exception:
             self.status_bar.configure(text="An error occured...")
@@ -1193,8 +1187,7 @@ class Player(Settings):
                 self._set_thread(self._updating, "Helper").start()
                 self.play_btn_img = self.pause_img
                 self._play_btn.configure(image=self.play_btn_img)
-        except Exception as e:
-            print(">>> Exception in _on_click():", e)
+        except Exception:
             # Slow internet may cause problems, going offline after connection
             if self.tab_num:
                 self.searchlabel.configure(text="Search online:")
@@ -2144,6 +2137,7 @@ except Exception:
     tk.destroy()
 
 p.shuffle_mixer.release_sleep()
+print("LEAVING...")
 sys.exit(1)
 # TODO
 # pass song to queue of already playing player

@@ -174,20 +174,20 @@ class VLC():
         """
         self._release()
         self._instance.release()
+        if not self.will_sleep:
+            self.release_sleep()
 
     def prevent_sleep(self):
         """ prevent the system from sleeping """
         # Windows
         ctypes.windll.kernel32.SetThreadExecutionState(INHIBIT)
         self.will_sleep = False
-        print("SLEEP LOCK SET")
 
     def release_sleep(self):
         """ release the sleep lock """
         # Windows
         ctypes.windll.kernel32.SetThreadExecutionState(RELEASE)
         self.will_sleep = True
-        print("SLEEP LOCK RELEASED")
 
     def __del__(self):
         if not self.will_sleep:
